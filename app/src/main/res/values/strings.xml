@@ -2,7 +2,7 @@
 <resources>
 
     <string name="app_name">IBeacon Aware</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
+    <string name="search_button">Search IBeacons</string>
+    <string name="main_content">IBeacon Aware</string>
 
 </resources>

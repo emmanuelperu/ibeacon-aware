@@ -7,8 +7,15 @@ import android.app.Activity;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.RemoteException;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+
+import com.radiusnetworks.ibeacon.IBeaconConsumer;
+import com.radiusnetworks.ibeacon.IBeaconManager;
+import com.radiusnetworks.ibeacon.MonitorNotifier;
+import com.radiusnetworks.ibeacon.Region;
 
 
 /**
@@ -17,7 +24,10 @@ import android.view.View;
  *
  * @see SystemUiHider
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements IBeaconConsumer{
+
+    protected static final String TAG = "SearchRegionActivity";
+
     /**
      * Whether or not the system UI should be auto-hidden after
      * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
@@ -46,9 +56,14 @@ public class MainActivity extends Activity {
      */
     private SystemUiHider mSystemUiHider;
 
+    private IBeaconManager iBeaconManager = IBeaconManager.getInstanceForApplication(this);
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        this.iBeaconManager.bind(this);
 
         setContentView(R.layout.activity_main);
 
@@ -68,27 +83,16 @@ public class MainActivity extends Activity {
                     @Override
                     @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2)
                     public void onVisibilityChange(boolean visible) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR2) {
-                            // If the ViewPropertyAnimator API is available
-                            // (Honeycomb MR2 and later), use it to animate the
-                            // in-layout UI controls at the bottom of the
-                            // screen.
-                            if (mControlsHeight == 0) {
-                                mControlsHeight = controlsView.getHeight();
-                            }
-                            if (mShortAnimTime == 0) {
-                                mShortAnimTime = getResources().getInteger(
-                                        android.R.integer.config_shortAnimTime);
-                            }
-                            controlsView.animate()
-                                    .translationY(visible ? 0 : mControlsHeight)
-                                    .setDuration(mShortAnimTime);
-                        } else {
-                            // If the ViewPropertyAnimator APIs aren't
-                            // available, simply show or hide the in-layout UI
-                            // controls.
-                            controlsView.setVisibility(visible ? View.VISIBLE : View.GONE);
+                        if (mControlsHeight == 0) {
+                            mControlsHeight = controlsView.getHeight();
                         }
+                        if (mShortAnimTime == 0) {
+                            mShortAnimTime = getResources().getInteger(
+                                    android.R.integer.config_shortAnimTime);
+                        }
+                        controlsView.animate()
+                                .translationY(visible ? 0 : mControlsHeight)
+                                .setDuration(mShortAnimTime);
 
                         if (visible && AUTO_HIDE) {
                             // Schedule a hide().
@@ -112,7 +116,7 @@ public class MainActivity extends Activity {
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
-        findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+        findViewById(R.id.search_button).setOnTouchListener(mDelayHideTouchListener);
     }
 
     @Override
@@ -122,7 +126,7 @@ public class MainActivity extends Activity {
         // Trigger the initial hide() shortly after the activity has been
         // created, to briefly hint to the user that UI controls
         // are available.
-        delayedHide(100);
+        delayedHide(1000);
     }
 
 
@@ -156,5 +160,29 @@ public class MainActivity extends Activity {
     private void delayedHide(int delayMillis) {
         mHideHandler.removeCallbacks(mHideRunnable);
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
+    }
+
+    @Override
+    public void onIBeaconServiceConnect() {
+        iBeaconManager.setMonitorNotifier(new MonitorNotifier() {
+            @Override
+            public void didEnterRegion(com.radiusnetworks.ibeacon.Region region) {
+                Log.i(TAG, "I just saw an iBeacon for the firt time!");
+            }
+
+            @Override
+            public void didExitRegion(Region region) {
+                Log.i(TAG, "I no longer see an iBeacon");
+            }
+
+            @Override
+            public void didDetermineStateForRegion(int state, Region region) {
+                Log.i(TAG, "I have just switched from seeing/not seeing iBeacons: " + state);
+            }
+        });
+
+        try {
+            iBeaconManager.startMonitoringBeaconsInRegion(new Region(null, null, null, null));
+        } catch (RemoteException e) {   }
     }
 }
