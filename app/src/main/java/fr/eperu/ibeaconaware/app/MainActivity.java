@@ -12,10 +12,14 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
+import com.radiusnetworks.ibeacon.IBeacon;
 import com.radiusnetworks.ibeacon.IBeaconConsumer;
 import com.radiusnetworks.ibeacon.IBeaconManager;
 import com.radiusnetworks.ibeacon.MonitorNotifier;
+import com.radiusnetworks.ibeacon.RangeNotifier;
 import com.radiusnetworks.ibeacon.Region;
+
+import java.util.Collection;
 
 
 /**
@@ -24,7 +28,7 @@ import com.radiusnetworks.ibeacon.Region;
  *
  * @see SystemUiHider
  */
-public class MainActivity extends Activity implements IBeaconConsumer{
+public class MainActivity extends Activity implements IBeaconConsumer {
 
     protected static final String TAG = "SearchRegionActivity";
 
@@ -56,13 +60,19 @@ public class MainActivity extends Activity implements IBeaconConsumer{
      */
     private SystemUiHider mSystemUiHider;
 
+    /**
+     * Gestionnaire D'IBeacon de la librairie radiusnetwork.
+     */
     private IBeaconManager iBeaconManager = IBeaconManager.getInstanceForApplication(this);
 
-
+    /**
+     * {@inheritDoc}
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // On bind le manager avec notre activity, ce qui fera un appel à notre methode onIBeaconServiceConnect.
         this.iBeaconManager.bind(this);
 
         setContentView(R.layout.activity_main);
@@ -127,6 +137,8 @@ public class MainActivity extends Activity implements IBeaconConsumer{
         // created, to briefly hint to the user that UI controls
         // are available.
         delayedHide(1000);
+        this.iBeaconManager.setForegroundScanPeriod(10 * 1000);
+        this.iBeaconManager.setForegroundBetweenScanPeriod(3 * 1000);
     }
 
 
@@ -162,27 +174,89 @@ public class MainActivity extends Activity implements IBeaconConsumer{
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
     }
 
+    /**
+     * Lorsqu'on va stopper l'activity on va passer le baconmanager en mode background.
+     */
+    @Override
+    protected void onStop() {
+        super.onStop();
+        this.iBeaconManager.setBackgroundBetweenScanPeriod(5 * 000);
+        this.iBeaconManager.setBackgroundBetweenScanPeriod(30 * 000);
+        this.iBeaconManager.setBackgroundMode(this, true);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        this.iBeaconManager.unBind(this);
+    }
+
     @Override
     public void onIBeaconServiceConnect() {
+        this.initIbeaconManager(this.iBeaconManager);
+    }
+
+
+    public void initIbeaconManager(final IBeaconManager iBeaconManager) {
+
+        if (iBeaconManager == null) {
+            return ;
+        }
+
+        iBeaconManager.setRangeNotifier(new RangeNotifier() {
+            @Override
+            public void didRangeBeaconsInRegion(Collection<IBeacon> iBeacons, Region region) {
+                if (iBeacons != null && iBeacons.size() > 0) {
+                    Log.i(TAG, "Here are the iBeacons in the region  id : " + region.getProximityUuid());
+                    for (IBeacon iBeacon : iBeacons) {
+                        int proximity = iBeacon.getProximity();
+                        String label = "iBeacon " + iBeacon.getProximityUuid();
+                        switch (proximity) {
+                            case IBeacon.PROXIMITY_FAR:
+                                Log.i(TAG, label + " is far away.");
+                                break;
+                            case IBeacon.PROXIMITY_IMMEDIATE:
+                                Log.i(TAG, label + " is next to you.");
+                                break;
+                            case IBeacon.PROXIMITY_NEAR:
+                                Log.i(TAG, label + " is near.");
+                                break;
+                            default:
+                                Log.i(TAG, "I don't know where is iBeacon " + iBeacon.getProximityUuid());
+                        }
+                        Log.i(TAG, label + " is about " + iBeacon.getAccuracy() + "meters away");
+                    }
+                }
+//                Log.i(TAG, "unbind du manager");
+//                iBeaconManager.unBind(MainActivity.this);
+//                Log.i(TAG, "bind du manager");
+//                iBeaconManager.bind(MainActivity.this);
+            }
+        });
+
+
         iBeaconManager.setMonitorNotifier(new MonitorNotifier() {
             @Override
             public void didEnterRegion(com.radiusnetworks.ibeacon.Region region) {
-                Log.i(TAG, "I just saw an iBeacon for the firt time!");
+                Log.i(TAG, "I just saw a region for the firt time, id : " + region.getProximityUuid());
             }
 
             @Override
             public void didExitRegion(Region region) {
-                Log.i(TAG, "I no longer see an iBeacon");
+                Log.i(TAG, "I no longer see an iBeacon id : " + region.getProximityUuid());
             }
 
             @Override
             public void didDetermineStateForRegion(int state, Region region) {
-                Log.i(TAG, "I have just switched from seeing/not seeing iBeacons: " + state);
+                Log.i(TAG, "I have just switched from seeing/not seeing region : " + state);
             }
         });
 
         try {
-            iBeaconManager.startMonitoringBeaconsInRegion(new Region(null, null, null, null));
-        } catch (RemoteException e) {   }
+            iBeaconManager.startMonitoringBeaconsInRegion(new Region("ibeaconAwareRegion", null, null, null));
+            iBeaconManager.startRangingBeaconsInRegion(new Region("ibeaconAwareRegion", null, null, null));
+        } catch (RemoteException e) {
+        }
+
     }
 }
